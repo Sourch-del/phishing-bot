@@ -1,13 +1,14 @@
 import os
 import json
-import anthropic
+import google.generativeai as genai
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_KEY")
+GEMINI_KEY = os.environ.get("GEMINI_KEY")
 
-client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -26,25 +27,18 @@ async def check_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔍 Scanning in progress...")
 
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=500,
-            messages=[{
-                "role": "user",
-                "content": f"""Analyze whether this URL is a phishing link and reply with JSON only:
+        prompt = f"""Analyze whether this URL is a phishing link and reply with JSON only, no markdown:
 URL: {url}
 
 {{
-  "verdict": "safe/suspicious/dangerous",
+  "verdict": "safe or suspicious or dangerous",
   "risk_score": 0-100,
   "summary": "2 sentences in English",
   "flags": ["issue1", "issue2"]
 }}"""
-            }]
-        )
 
-        text = response.content[0].text
-        clean = text.replace("```json", "").replace("```", "").strip()
+        response = model.generate_content(prompt)
+        clean = response.text.replace("```json", "").replace("```", "").strip()
         data = json.loads(clean)
 
         if data["verdict"] == "safe":
